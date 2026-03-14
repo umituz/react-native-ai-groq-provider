@@ -25,6 +25,17 @@ class GroqHttpClient {
   initialize(config: GroqConfig): void {
     const apiKey = config.apiKey?.trim();
 
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[GroqClient] Initializing:", {
+        hasApiKey: !!apiKey,
+        keyLength: apiKey?.length,
+        keyPrefix: apiKey ? apiKey.substring(0, 10) + "..." : "",
+        baseUrl: config.baseUrl || DEFAULT_BASE_URL,
+        timeoutMs: config.timeoutMs || DEFAULT_TIMEOUT,
+        textModel: config.textModel,
+      });
+    }
+
     if (!apiKey || apiKey.length < 10) {
       throw new GroqError(
         GroqErrorType.INVALID_API_KEY,
@@ -39,6 +50,13 @@ class GroqHttpClient {
       textModel: config.textModel,
     };
     this.initialized = true;
+
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[GroqClient] Initialization complete:", {
+        initialized: this.initialized,
+        baseUrl: this.config.baseUrl,
+      });
+    }
   }
 
   /**
@@ -79,6 +97,17 @@ class GroqHttpClient {
     const url = `${this.config.baseUrl}${endpoint}`;
     const timeout = this.config.timeoutMs || DEFAULT_TIMEOUT;
 
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[GroqClient] API Request:", {
+        url,
+        endpoint,
+        method: "POST",
+        timeout: `${timeout}ms`,
+        hasBody: !!body,
+        bodyKeys: body ? Object.keys(body) : [],
+      });
+    }
+
     try {
       // Create AbortController for timeout
       const controller = new AbortController();
@@ -89,6 +118,7 @@ class GroqHttpClient {
         signal.addEventListener("abort", () => controller.abort());
       }
 
+      const fetchStartTime = Date.now();
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -99,14 +129,44 @@ class GroqHttpClient {
         signal: controller.signal,
       });
 
+      const fetchDuration = Date.now() - fetchStartTime;
       clearTimeout(timeoutId);
+
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.log("[GroqClient] API Response:", {
+          status: response.status,
+          ok: response.ok,
+          fetchDuration: `${fetchDuration}ms`,
+          contentType: response.headers.get("content-type"),
+        });
+      }
 
       if (!response.ok) {
         await this.handleErrorResponse(response);
       }
 
-      return (await response.json()) as T;
+      const jsonStart = Date.now();
+      const jsonData = (await response.json()) as T;
+      const parseDuration = Date.now() - jsonStart;
+
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.log("[GroqClient] JSON parsed:", {
+          parseDuration: `${parseDuration}ms`,
+          hasData: !!jsonData,
+          dataKeys: jsonData ? Object.keys(jsonData) : [],
+        });
+      }
+
+      return jsonData;
     } catch (error) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.error("[GroqClient] Request error:", {
+          error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorName: error instanceof Error ? error.name : undefined,
+        });
+      }
+
       throw this.handleRequestError(error);
     }
   }

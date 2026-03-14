@@ -26,7 +26,19 @@ export async function structuredText<T = Record<string, unknown>>(
   prompt: string,
   options: StructuredTextOptions<T> = {}
 ): Promise<T> {
+  const startTime = Date.now();
   const model = options.model || DEFAULT_MODELS.TEXT;
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] structuredText called:", {
+      model,
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 150) + "...",
+      hasSchema: !!options.schema,
+      hasExample: !!options.example,
+      generationConfig: options.generationConfig,
+    });
+  }
 
   let systemPrompt = "You are a helpful assistant that generates valid JSON output.";
 
@@ -59,7 +71,30 @@ export async function structuredText<T = Record<string, unknown>>(
     top_p: options.generationConfig?.topP || 0.9,
   };
 
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] Sending structured request:", {
+      endpoint: "/v1/chat/completions",
+      requestBody: {
+        model: request.model,
+        temperature: request.temperature,
+        max_tokens: request.max_tokens,
+        top_p: request.top_p,
+      },
+    });
+  }
+
+  const apiStartTime = Date.now();
   const response = await groqHttpClient.chatCompletion(request);
+  const apiDuration = Date.now() - apiStartTime;
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] Structured API response:", {
+      apiDuration: `${apiDuration}ms`,
+      usage: response.usage,
+      finishReason: response.choices?.[0]?.finish_reason,
+      hasContent: !!response.choices?.[0]?.message?.content,
+    });
+  }
 
   let content = response.choices[0]?.message?.content;
   if (!content) {
@@ -67,6 +102,13 @@ export async function structuredText<T = Record<string, unknown>>(
       GroqErrorType.UNKNOWN_ERROR,
       "No content generated from Groq API"
     );
+  }
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] Raw response content:", {
+      length: content.length,
+      preview: content.substring(0, 300) + "...",
+    });
   }
 
   // Clean up the response: remove markdown code blocks if present
@@ -81,9 +123,33 @@ export async function structuredText<T = Record<string, unknown>>(
   }
   content = content.trim();
 
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] Attempting JSON parse...");
+  }
+
   try {
-    return JSON.parse(content) as T;
+    const parsed = JSON.parse(content) as T;
+    const totalDuration = Date.now() - startTime;
+
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.log("[Groq] structuredText complete:", {
+        totalDuration: `${totalDuration}ms`,
+        apiDuration: `${apiDuration}ms`,
+        parseDuration: `${totalDuration - apiDuration}ms`,
+        parsedKeys: Object.keys(parsed),
+      });
+    }
+
+    return parsed;
   } catch (error) {
+    if (typeof __DEV__ !== "undefined" && __DEV__) {
+      console.error("[Groq] JSON parse failed:", {
+        error,
+        contentLength: content.length,
+        contentPreview: content.substring(0, 500) + "...",
+      });
+    }
+
     throw new GroqError(
       GroqErrorType.UNKNOWN_ERROR,
       `Failed to parse JSON response: ${content}`,
@@ -99,7 +165,17 @@ export async function structuredChat<T = Record<string, unknown>>(
   messages: GroqMessage[],
   options: StructuredTextOptions<T> = {}
 ): Promise<T> {
+  const startTime = Date.now();
   const model = options.model || DEFAULT_MODELS.TEXT;
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] structuredChat called:", {
+      model,
+      messageCount: messages.length,
+      hasSchema: !!options.schema,
+      hasExample: !!options.example,
+    });
+  }
 
   let systemMessage: GroqMessage | null = null;
 
@@ -137,7 +213,16 @@ export async function structuredChat<T = Record<string, unknown>>(
     top_p: options.generationConfig?.topP || 0.9,
   };
 
+  const apiStartTime = Date.now();
   const response = await groqHttpClient.chatCompletion(request);
+  const apiDuration = Date.now() - apiStartTime;
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] structuredChat API response:", {
+      apiDuration: `${apiDuration}ms`,
+      usage: response.usage,
+    });
+  }
 
   let content = response.choices[0]?.message?.content;
   if (!content) {
@@ -158,6 +243,14 @@ export async function structuredChat<T = Record<string, unknown>>(
     content = content.slice(0, -3);
   }
   content = content.trim();
+
+  const totalDuration = Date.now() - startTime;
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.log("[Groq] structuredChat complete:", {
+      totalDuration: `${totalDuration}ms`,
+      responseLength: content.length,
+    });
+  }
 
   try {
     return JSON.parse(content) as T;
