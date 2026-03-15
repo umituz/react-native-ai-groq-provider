@@ -1,6 +1,6 @@
 {
   "name": "@umituz/react-native-ai-groq-provider",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "Groq text generation provider for React Native applications",
   "main": "./src/index.ts",
   "types": "./dist/index.d.ts",
