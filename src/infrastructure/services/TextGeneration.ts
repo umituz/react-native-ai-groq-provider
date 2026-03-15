@@ -5,7 +5,6 @@
 
 import type {
   GroqChatRequest,
-  GroqChatResponse,
   GroqMessage,
   GroqGenerationConfig,
 } from "../../domain/entities";

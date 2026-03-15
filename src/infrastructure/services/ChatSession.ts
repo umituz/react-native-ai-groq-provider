@@ -104,7 +104,7 @@ class ChatSessionService {
   async send(
     sessionId: string,
     content: string,
-    options: SendChatMessageOptions = {}
+    _options: SendChatMessageOptions = {}
   ): Promise<ChatSendResult> {
     const session = this.sessions.get(sessionId);
     if (!session) {

@@ -3,7 +3,6 @@
  * Factory for creating configured Groq provider instances
  */
 
-import type { GroqConfig, GroqGenerationConfig } from "../domain/entities";
 import { groqHttpClient } from "../infrastructure/services/GroqClient";
 import { ConfigBuilder, GenerationConfigBuilder } from "./ConfigBuilder";
 

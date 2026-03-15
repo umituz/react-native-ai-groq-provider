@@ -4,10 +4,8 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import type { GroqGenerationConfig, GroqChatConfig } from "../../domain/entities";
-import { groqHttpClient } from "../../infrastructure/services/GroqClient";
-import { chatSessionService } from "../../infrastructure/services/ChatSession";
-import { textGeneration, chatGeneration } from "../../infrastructure/services/TextGeneration";
+import type { GroqGenerationConfig } from "../../domain/entities";
+import { textGeneration } from "../../infrastructure/services/TextGeneration";
 import { structuredText } from "../../infrastructure/services/StructuredText";
 import { streaming } from "../../infrastructure/services/Streaming";
 import { getUserFriendlyError } from "../../infrastructure/utils/error-mapper.util";
@@ -167,7 +165,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       options.onStart?.();
 
       try {
-        for await (const chunk of streaming(prompt, {
+        for await (const streamingResult of streaming(prompt, {
           model: options.model,
           generationConfig: { ...options.generationConfig, ...config },
           callbacks: {
@@ -177,7 +175,8 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
             },
           },
         })) {
-          // Streamed via callback
+          // Consume the async iterator (streaming is handled via callbacks)
+          void streamingResult;
         }
 
         setResult(fullContent);
