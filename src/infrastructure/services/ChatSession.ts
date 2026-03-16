@@ -11,6 +11,7 @@ import type {
 import { groqHttpClient } from "./GroqClient";
 import { DEFAULT_MODELS } from "../../domain/entities";
 import { GroqError, GroqErrorType } from "../../domain/entities/error.types";
+import { generateSessionId, calculateMaxMessages } from "../../infrastructure/utils/calculation.util";
 
 /**
  * Chat session state
@@ -59,7 +60,7 @@ export type ChatHistoryMessage = {
  */
 export function createChatSession(config: GroqChatConfig = {}): ChatSession {
   return {
-    id: `groq-chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: generateSessionId("groq-chat"),
     model: config.model || DEFAULT_MODELS.TEXT,
     systemInstruction: config.systemInstruction,
     messages: config.history ? [...config.history] : [],
@@ -74,13 +75,31 @@ export function createChatSession(config: GroqChatConfig = {}): ChatSession {
  */
 class ChatSessionService {
   private sessions = new Map<string, ChatSession>();
+  private readonly MAX_SESSIONS = 100; // Prevent unlimited memory growth
+  private readonly SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   /**
    * Create a new chat session
    */
   create(config: GroqChatConfig = {}): ChatSession {
+    // Auto-cleanup old sessions before creating new one
+    this.cleanupOldSessions();
+
     const session = createChatSession(config);
     this.sessions.set(session.id, session);
+
+    // Enforce session limit
+    if (this.sessions.size > this.MAX_SESSIONS) {
+      // Remove oldest sessions
+      const sortedSessions = Array.from(this.sessions.entries())
+        .sort(([, a], [, b]) => a.createdAt.getTime() - b.createdAt.getTime());
+
+      const toRemove = sortedSessions.slice(0, this.sessions.size - this.MAX_SESSIONS);
+      for (const [id] of toRemove) {
+        this.sessions.delete(id);
+      }
+    }
+
     return session;
   }
 
@@ -96,6 +115,39 @@ class ChatSessionService {
    */
   delete(sessionId: string): boolean {
     return this.sessions.delete(sessionId);
+  }
+
+  /**
+   * Cleanup old sessions automatically
+   */
+  private cleanupOldSessions(): void {
+    const now = Date.now();
+    const expiredIds: string[] = [];
+
+    for (const [id, session] of this.sessions.entries()) {
+      const age = now - session.updatedAt.getTime();
+      if (age > this.SESSION_TTL_MS) {
+        expiredIds.push(id);
+      }
+    }
+
+    for (const id of expiredIds) {
+      this.sessions.delete(id);
+    }
+  }
+
+  /**
+   * Get active session count
+   */
+  getActiveCount(): number {
+    return this.sessions.size;
+  }
+
+  /**
+   * Clear all sessions
+   */
+  clearAll(): void {
+    this.sessions.clear();
   }
 
   /**
@@ -247,9 +299,8 @@ export function trimChatHistory(
   messages: GroqMessage[],
   maxTokens: number = 4000
 ): GroqMessage[] {
-  // Simple heuristic: assume average of 4 tokens per message
-  // For production, use a proper token counter
-  const maxMessages = Math.floor(maxTokens / 100);
+  // Calculate max messages using utility function
+  const maxMessages = calculateMaxMessages(maxTokens);
 
   if (messages.length <= maxMessages) {
     return messages;

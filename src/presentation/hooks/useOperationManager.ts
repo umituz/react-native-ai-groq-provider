@@ -3,7 +3,7 @@
  * Manages async operations with loading, error, and success states
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { getUserFriendlyError } from "../../infrastructure/utils/error-mapper.util";
 import { telemetry } from "../../infrastructure/telemetry";
 
@@ -26,14 +26,23 @@ export interface UseOperationManagerOptions<T> {
 
 /**
  * Hook for managing async operations
+ * Optimized to prevent unnecessary re-renders
  */
 export function useOperationManager<T = unknown>(
   options: UseOperationManagerOptions<T> = {}
 ) {
+  // Memoize options to prevent unnecessary callback recreations
+  const stableOptions = useMemo(() => options, [
+    options.initialData,
+    options.onStart,
+    options.onSuccess,
+    options.onError,
+  ]);
+
   const [state, setState] = useState<OperationState<T>>({
     isLoading: false,
     error: null,
-    data: options.initialData ?? null,
+    data: stableOptions.initialData ?? null,
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -56,27 +65,27 @@ export function useOperationManager<T = unknown>(
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       telemetry.log(`${operationName}_start`);
-      options.onStart?.();
+      stableOptions.onStart?.();
 
       try {
         const result = await asyncFn(abortControllerRef.current.signal);
 
         setState((prev) => ({ ...prev, isLoading: false, data: result as unknown as T }));
-        options.onSuccess?.(result as unknown as T);
+        stableOptions.onSuccess?.(result as unknown as T);
         telemetry.log(`${operationName}_success`);
 
         return result;
       } catch (error) {
         const errorMessage = getUserFriendlyError(error);
         setState((prev) => ({ ...prev, isLoading: false, error: errorMessage }));
-        options.onError?.(errorMessage);
+        stableOptions.onError?.(errorMessage);
         telemetry.log(`${operationName}_error`, { error: errorMessage });
         throw error;
       } finally {
         abortControllerRef.current = null;
       }
     },
-    [options]
+    [stableOptions]
   );
 
   const reset = useCallback(() => {
@@ -88,9 +97,9 @@ export function useOperationManager<T = unknown>(
       ...prev,
       isLoading: false,
       error: null,
-      data: options.initialData ?? null,
+      data: stableOptions.initialData ?? null,
     }));
-  }, [options.initialData]);
+  }, [stableOptions.initialData]);
 
   const clearError = useCallback(() => {
     setState((prev) => ({ ...prev, error: null }));

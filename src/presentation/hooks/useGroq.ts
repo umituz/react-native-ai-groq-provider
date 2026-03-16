@@ -3,7 +3,7 @@
  * Main React hook for Groq text generation
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import type { GroqGenerationConfig } from "../../domain/entities";
 import { textGeneration } from "../../infrastructure/services/TextGeneration";
 import { structuredText } from "../../infrastructure/services/StructuredText";
@@ -52,12 +52,24 @@ export interface UseGroqReturn {
 
 /**
  * Hook for Groq text generation
+ * Optimized to prevent unnecessary re-renders and memory leaks
  */
 export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Memoize options to prevent unnecessary callback recreations
+  const stableOptions = useMemo(() => options, [
+    options.model,
+    options.generationConfig?.temperature,
+    options.generationConfig?.maxTokens,
+    options.generationConfig?.topP,
+    options.onStart,
+    options.onSuccess,
+    options.onError,
+  ]);
 
   const generate = useCallback(
     async (prompt: string, config?: GroqGenerationConfig): Promise<string> => {
@@ -72,23 +84,23 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setResult(null);
 
       telemetry.log("groq_generate_start", { prompt: prompt.substring(0, 100) });
-      options.onStart?.();
+      stableOptions.onStart?.();
 
       try {
         const response = await textGeneration(prompt, {
-          model: options.model,
-          generationConfig: { ...options.generationConfig, ...config },
+          model: stableOptions.model,
+          generationConfig: { ...stableOptions.generationConfig, ...config },
         });
 
         setResult(response);
-        options.onSuccess?.(response);
+        stableOptions.onSuccess?.(response);
         telemetry.log("groq_generate_success", { responseLength: response.length });
 
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        options.onError?.(errorMessage);
+        stableOptions.onError?.(errorMessage);
         telemetry.log("groq_generate_error", { error: errorMessage });
         throw err;
       } finally {
@@ -96,7 +108,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         abortControllerRef.current = null;
       }
     },
-    [options]
+    [stableOptions]
   );
 
   const generateJSON = useCallback(
@@ -115,24 +127,24 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setResult(null);
 
       telemetry.log("groq_generate_json_start", { prompt: prompt.substring(0, 100) });
-      options.onStart?.();
+      stableOptions.onStart?.();
 
       try {
         const response = await structuredText<T>(prompt, {
-          model: options.model,
-          generationConfig: { ...options.generationConfig, ...config },
+          model: stableOptions.model,
+          generationConfig: { ...stableOptions.generationConfig, ...config },
           schema: config?.schema,
         });
 
         setResult(JSON.stringify(response, null, 2));
-        options.onSuccess?.(JSON.stringify(response, null, 2));
+        stableOptions.onSuccess?.(JSON.stringify(response, null, 2));
         telemetry.log("groq_generate_json_success");
 
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        options.onError?.(errorMessage);
+        stableOptions.onError?.(errorMessage);
         telemetry.log("groq_generate_json_error", { error: errorMessage });
         throw err;
       } finally {
@@ -140,7 +152,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         abortControllerRef.current = null;
       }
     },
-    [options]
+    [stableOptions]
   );
 
   const stream = useCallback(
@@ -162,12 +174,12 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       let fullContent = "";
 
       telemetry.log("groq_stream_start", { prompt: prompt.substring(0, 100) });
-      options.onStart?.();
+      stableOptions.onStart?.();
 
       try {
         for await (const streamingResult of streaming(prompt, {
-          model: options.model,
-          generationConfig: { ...options.generationConfig, ...config },
+          model: stableOptions.model,
+          generationConfig: { ...stableOptions.generationConfig, ...config },
           callbacks: {
             onChunk: (c) => {
               fullContent += c;
@@ -180,12 +192,12 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         }
 
         setResult(fullContent);
-        options.onSuccess?.(fullContent);
+        stableOptions.onSuccess?.(fullContent);
         telemetry.log("groq_stream_success", { contentLength: fullContent.length });
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        options.onError?.(errorMessage);
+        stableOptions.onError?.(errorMessage);
         telemetry.log("groq_stream_error", { error: errorMessage });
         throw err;
       } finally {
@@ -193,7 +205,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
         abortControllerRef.current = null;
       }
     },
-    [options]
+    [stableOptions]
   );
 
   const reset = useCallback(() => {

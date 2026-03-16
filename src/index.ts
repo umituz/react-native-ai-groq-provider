@@ -108,6 +108,22 @@ export {
 } from "./infrastructure/utils/async";
 
 export {
+  generateRandomId,
+  generateSessionId,
+  calculateMaxMessages,
+  calculateExponentialBackoff,
+  clamp,
+  calculatePercentage,
+  calculateSafeBufferSize,
+  estimateTokens,
+  isWithinSafeLimit,
+  calculateRetryDelayWithJitter,
+  calculateRequestTimeout,
+  calculateTransferRate,
+  calculateAverage,
+} from "./infrastructure/utils/calculation.util";
+
+export {
   telemetry,
   useTelemetry,
 } from "./infrastructure/telemetry";

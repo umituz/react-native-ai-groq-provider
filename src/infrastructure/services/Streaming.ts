@@ -50,15 +50,18 @@ export async function* streaming(
     top_p: options.generationConfig?.topP,
   };
 
+  let fullContent = "";
+
   try {
     for await (const chunk of groqHttpClient.chatCompletionStream(request)) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
+        fullContent += content;
         options.callbacks?.onChunk?.(content);
         yield content;
       }
     }
-    options.callbacks?.onComplete?.(await collectStreamContent(request));
+    options.callbacks?.onComplete?.(fullContent);
   } catch (error) {
     options.callbacks?.onError?.(error as Error);
     throw error;
@@ -82,33 +85,20 @@ export async function* streamingChat(
     top_p: options.generationConfig?.topP,
   };
 
+  let fullContent = "";
+
   try {
     for await (const chunk of groqHttpClient.chatCompletionStream(request)) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
+        fullContent += content;
         options.callbacks?.onChunk?.(content);
         yield content;
       }
     }
-    options.callbacks?.onComplete?.(await collectStreamContent(request));
+    options.callbacks?.onComplete?.(fullContent);
   } catch (error) {
     options.callbacks?.onError?.(error as Error);
     throw error;
   }
-}
-
-/**
- * Collect full content from streaming (for onComplete callback)
- */
-async function collectStreamContent(request: GroqChatRequest): Promise<string> {
-  let fullContent = "";
-
-  for await (const chunk of groqHttpClient.chatCompletionStream(request)) {
-    const content = chunk.choices[0]?.delta?.content;
-    if (content) {
-      fullContent += content;
-    }
-  }
-
-  return fullContent;
 }

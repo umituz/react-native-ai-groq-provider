@@ -84,3 +84,19 @@ export function formatMessagesForDisplay(messages: GroqMessage[]): string {
     })
     .join("\n\n---\n\n");
 }
+
+/**
+ * Clean JSON response by removing markdown code blocks
+ */
+export function cleanJsonResponse(content: string): string {
+  let cleaned = content.trim();
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.slice(7);
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.endsWith("```")) {
+    cleaned = cleaned.slice(0, -3);
+  }
+  return cleaned.trim();
+}

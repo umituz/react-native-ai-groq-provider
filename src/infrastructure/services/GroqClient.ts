@@ -10,6 +10,7 @@ import type {
   GroqChatChunk,
 } from "../../domain/entities";
 import { GroqError, GroqErrorType, mapHttpStatusToErrorType } from "../../domain/entities/error.types";
+import { calculateSafeBufferSize } from "../../infrastructure/utils/calculation.util";
 
 const DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
 const DEFAULT_TIMEOUT = 60000; // 60 seconds
@@ -295,6 +296,7 @@ class GroqHttpClient {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB max buffer to prevent memory issues
 
       while (true) {
         const { done, value } = await reader.read();
@@ -302,6 +304,13 @@ class GroqHttpClient {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
+
+        // Prevent unlimited buffer growth using utility function
+        const safeSize = calculateSafeBufferSize(buffer.length, MAX_BUFFER_SIZE);
+        if (safeSize < buffer.length) {
+          buffer = buffer.slice(-safeSize);
+        }
+
         const lines = buffer.split("\n");
         buffer = lines.pop() || "";
 
@@ -315,7 +324,9 @@ class GroqHttpClient {
               const chunk = JSON.parse(jsonStr) as GroqChatChunk;
               yield chunk;
             } catch (error) {
-              console.error("Failed to parse SSE chunk:", error);
+              if (typeof __DEV__ !== "undefined" && __DEV__) {
+                console.error("Failed to parse SSE chunk:", error);
+              }
             }
           }
         }

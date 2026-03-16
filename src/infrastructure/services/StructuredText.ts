@@ -11,6 +11,7 @@ import type {
 import { groqHttpClient } from "./GroqClient";
 import { DEFAULT_MODELS } from "../../domain/entities";
 import { GroqError, GroqErrorType } from "../../domain/entities/error.types";
+import { cleanJsonResponse } from "../../infrastructure/utils/content-mapper.util";
 
 export interface StructuredTextOptions<T> {
   model?: string;
@@ -111,17 +112,7 @@ export async function structuredText<T = Record<string, unknown>>(
     });
   }
 
-  // Clean up the response: remove markdown code blocks if present
-  content = content.trim();
-  if (content.startsWith("```json")) {
-    content = content.slice(7);
-  } else if (content.startsWith("```")) {
-    content = content.slice(3);
-  }
-  if (content.endsWith("```")) {
-    content = content.slice(0, -3);
-  }
-  content = content.trim();
+  content = cleanJsonResponse(content);
 
   if (typeof __DEV__ !== "undefined" && __DEV__) {
     console.log("[Groq] Attempting JSON parse...");
@@ -232,17 +223,7 @@ export async function structuredChat<T = Record<string, unknown>>(
     );
   }
 
-  // Clean up the response: remove markdown code blocks if present
-  content = content.trim();
-  if (content.startsWith("```json")) {
-    content = content.slice(7);
-  } else if (content.startsWith("```")) {
-    content = content.slice(3);
-  }
-  if (content.endsWith("```")) {
-    content = content.slice(0, -3);
-  }
-  content = content.trim();
+  content = cleanJsonResponse(content);
 
   const totalDuration = Date.now() - startTime;
   if (typeof __DEV__ !== "undefined" && __DEV__) {
