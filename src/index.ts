@@ -2,11 +2,18 @@
  * @umituz/react-native-ai-groq-provider
  * Groq text generation provider for React Native applications
  *
+ * DDD Architecture:
+ * - Domain: Core entities and types
+ * - Application: Use cases and business logic
+ * - Infrastructure: External services and HTTP clients
+ * - Presentation: React hooks and UI utilities
+ * - Shared: Common utilities
+ *
  * @author umituz
  * @license MIT
  */
 
-// Domain Types
+// Domain Layer
 export type {
   GroqConfig,
   GroqGenerationConfig,
@@ -42,32 +49,47 @@ export {
   type ModelInfo,
 } from "./domain/entities/models";
 
-// Services
-export { groqHttpClient } from "./infrastructure/services/GroqClient";
-export { textGeneration, chatGeneration } from "./infrastructure/services/TextGeneration";
-export { structuredText, structuredChat } from "./infrastructure/services/StructuredText";
-export { streaming, streamingChat } from "./infrastructure/services/Streaming";
+// Application Layer (Use Cases)
 export {
-  chatSessionService,
-  createChatSession,
-  sendChatMessage,
-  buildChatHistory,
-  trimChatHistory,
+  generateText,
+  generateStructured,
+  streamText,
+  chatSessionManager,
+  type TextGenerationOptions,
+  type StructuredGenerationOptions,
+  type StreamingCallbacks,
+  type StreamingOptions,
   type ChatSession,
-  type SendChatMessageOptions,
   type ChatSendResult,
-  type ChatHistoryMessage,
-} from "./infrastructure/services";
+} from "./application/use-cases";
 
-export type { StreamingCallbacks, StreamingOptions } from "./infrastructure/services/Streaming";
+// Infrastructure Layer
+export {
+  groqHttpClient,
+  streamChatCompletion,
+} from "./infrastructure/http";
 
-// React Hooks
-export { useGroq } from "./presentation/hooks/useGroq";
-export type { UseGroqOptions, UseGroqReturn } from "./presentation/hooks/useGroq";
+// Presentation Layer
+export {
+  useGroq,
+  type UseGroqOptions,
+  type UseGroqReturn,
+} from "./presentation";
 
-export { useOperationManager } from "./presentation/hooks/useOperationManager";
+// Shared Layer
+export {
+  logger,
+  LogLevel,
+  Timer,
+  RequestBuilder,
+  ResponseHandler,
+  type LogContext,
+  type TimerResult,
+  type RequestBuilderOptions,
+  type ResponseHandlerResult,
+} from "./shared";
 
-// Provider Configuration & Factory
+// Provider Factory
 export {
   ConfigBuilder,
   GenerationConfigBuilder,
@@ -75,11 +97,8 @@ export {
   initializeProvider,
   configureProvider,
   resetProvider,
-} from "./providers/ProviderFactory";
-
-export type {
-  ProviderConfig,
-  ProviderFactoryOptions,
+  type ProviderConfig,
+  type ProviderFactoryOptions,
 } from "./providers/ProviderFactory";
 
 // Utilities
@@ -91,21 +110,22 @@ export {
   promptToMessages,
   extractTextFromMessages,
   formatMessagesForDisplay,
-} from "./infrastructure/utils/content-mapper.util";
+  cleanJsonResponse,
+} from "./utils/content-mapper.util";
 
 export {
   getUserFriendlyError,
   isRetryableError,
   isAuthError,
   formatErrorForLogging,
-} from "./infrastructure/utils/error-mapper.util";
+} from "./utils/error-mapper.util";
 
 export {
   executeWithState,
   executeWithRetry,
   type AsyncStateSetters,
   type AsyncCallbacks,
-} from "./infrastructure/utils/async";
+} from "./utils/async";
 
 export {
   generateRandomId,
@@ -121,7 +141,7 @@ export {
   calculateRequestTimeout,
   calculateTransferRate,
   calculateAverage,
-} from "./infrastructure/utils/calculation.util";
+} from "./utils/calculation.util";
 
 export {
   telemetry,
