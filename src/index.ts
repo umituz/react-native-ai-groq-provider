@@ -111,21 +111,21 @@ export {
   extractTextFromMessages,
   formatMessagesForDisplay,
   cleanJsonResponse,
-} from "./utils/content-mapper.util";
+} from "./infrastructure/utils/content-mapper.util";
 
 export {
   getUserFriendlyError,
   isRetryableError,
   isAuthError,
   formatErrorForLogging,
-} from "./utils/error-mapper.util";
+} from "./infrastructure/utils/error-mapper.util";
 
 export {
   executeWithState,
   executeWithRetry,
   type AsyncStateSetters,
   type AsyncCallbacks,
-} from "./utils/async";
+} from "./infrastructure/utils/async";
 
 export {
   generateRandomId,
