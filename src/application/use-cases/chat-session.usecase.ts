@@ -35,9 +35,15 @@ class ChatSessionManager {
   private sessions = new Map<string, ChatSession>();
   private readonly MAX_SESSIONS = 100;
   private readonly SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+  private oldestSessionId: string | null = null;
+  private cleanupScheduled = false;
+  private readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   create(config: GroqChatConfig = {}): ChatSession {
-    this.cleanupOldSessions();
+    // Lazy cleanup - only check when needed, not every time
+    if (this.sessions.size >= this.MAX_SESSIONS || !this.cleanupScheduled) {
+      this.scheduleCleanup();
+    }
 
     const session: ChatSession = {
       id: generateSessionId("groq-chat"),
@@ -50,8 +56,16 @@ class ChatSessionManager {
 
     this.sessions.set(session.id, session);
 
-    if (this.sessions.size > this.MAX_SESSIONS) {
-      this.removeOldestSessions();
+    // Track oldest session for O(1) removal
+    if (!this.oldestSessionId ||
+        this.sessions.get(this.oldestSessionId)!.createdAt > session.createdAt) {
+      this.oldestSessionId = session.id;
+    }
+
+    // Fast path: if at limit, just remove oldest
+    if (this.sessions.size > this.MAX_SESSIONS && this.oldestSessionId) {
+      this.sessions.delete(this.oldestSessionId);
+      this.updateOldestSessionId();
     }
 
     return session;
@@ -62,33 +76,52 @@ class ChatSessionManager {
   }
 
   delete(sessionId: string): boolean {
-    return this.sessions.delete(sessionId);
+    const deleted = this.sessions.delete(sessionId);
+    if (deleted && sessionId === this.oldestSessionId) {
+      this.updateOldestSessionId();
+    }
+    return deleted;
+  }
+
+  private scheduleCleanup(): void {
+    if (this.cleanupScheduled) return;
+
+    this.cleanupScheduled = true;
+    // Schedule cleanup for next idle time
+    setTimeout(() => {
+      this.cleanupOldSessions();
+      this.cleanupScheduled = false;
+    }, this.CLEANUP_INTERVAL_MS);
+  }
+
+  private updateOldestSessionId(): void {
+    let oldest: Date | null = null;
+    let oldestId: string | null = null;
+
+    for (const [id, session] of this.sessions.entries()) {
+      if (!oldest || session.createdAt < oldest) {
+        oldest = session.createdAt;
+        oldestId = id;
+      }
+    }
+
+    this.oldestSessionId = oldestId;
   }
 
   private cleanupOldSessions(): void {
     const now = Date.now();
-    const expiredIds: string[] = [];
+    let removed = 0;
 
     for (const [id, session] of this.sessions.entries()) {
       const age = now - session.updatedAt.getTime();
       if (age > this.SESSION_TTL_MS) {
-        expiredIds.push(id);
+        this.sessions.delete(id);
+        removed++;
       }
     }
 
-    expiredIds.forEach((id) => this.sessions.delete(id));
-  }
-
-  private removeOldestSessions(): void {
-    const excessCount = this.sessions.size - this.MAX_SESSIONS;
-    if (excessCount <= 0) return;
-
-    // Sort by creation date and remove oldest
-    const sorted = Array.from(this.sessions.entries())
-      .sort(([, a], [, b]) => a.createdAt.getTime() - b.createdAt.getTime());
-
-    for (let i = 0; i < excessCount; i++) {
-      this.sessions.delete(sorted[i][0]);
+    if (removed > 0) {
+      this.updateOldestSessionId();
     }
   }
 
@@ -103,6 +136,11 @@ class ChatSessionManager {
 
     const userMessage: GroqMessage = { role: "user", content };
     session.messages.push(userMessage);
+
+    // Prevent unbounded memory growth
+    if (session.messages.length > 100) {
+      session.messages = session.messages.slice(-50); // Keep last 50
+    }
 
     const messages = this.buildMessages(session);
     const request = RequestBuilder.buildChatRequest(messages, {

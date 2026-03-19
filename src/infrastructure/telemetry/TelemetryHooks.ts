@@ -1,9 +1,10 @@
 /**
  * Telemetry Hooks
  * Simple telemetry tracking for Groq operations
+ * Optimized with O(1) circular buffer
  */
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 
 type TelemetryEvent = {
   name: string;
@@ -15,15 +16,15 @@ class Telemetry {
   private events: TelemetryEvent[] = [];
   private enabled: boolean;
   private readonly MAX_EVENTS = 1000;
-  private nextIndex = 0; // For circular buffer
-  private isCircular = false; // Track when we've wrapped around
+  private head = 0; // Write position
+  private count = 0; // Actual number of events
 
   constructor() {
     this.enabled = typeof __DEV__ !== "undefined" && __DEV__;
   }
 
   /**
-   * Log a telemetry event
+   * Log a telemetry event - O(1) operation
    */
   log(name: string, data?: Record<string, unknown>): void {
     if (!this.enabled) return;
@@ -34,43 +35,44 @@ class Telemetry {
       data,
     };
 
-    // Use circular buffer pattern for O(1) insertion
-    if (this.events.length < this.MAX_EVENTS) {
-      this.events.push(event);
-    } else {
-      // Circular buffer: overwrite oldest event
-      this.events[this.nextIndex] = event;
-      this.nextIndex = (this.nextIndex + 1) % this.MAX_EVENTS;
-      this.isCircular = true;
-    }
+    // Circular buffer: O(1) write
+    this.events[this.head] = event;
+    this.head = (this.head + 1) % this.MAX_EVENTS;
 
-    if (__DEV__) {
-      console.log(`[Groq Telemetry] ${name}`, data);
+    if (this.count < this.MAX_EVENTS) {
+      this.count++;
     }
   }
 
   /**
-   * Get all events
+   * Get all events in chronological order
+   * Returns frozen array to prevent external mutations
    */
   getEvents(): ReadonlyArray<TelemetryEvent> {
-    if (this.isCircular) {
-      // Return events in circular order (oldest first)
-      const result = [
-        ...this.events.slice(this.nextIndex),
-        ...this.events.slice(0, this.nextIndex),
-      ];
-      return Object.freeze(result);
+    if (this.count === 0) {
+      return Object.freeze([]);
     }
-    return Object.freeze(this.events);
+
+    // O(n) but only when called, not on every log
+    if (this.count < this.MAX_EVENTS) {
+      // Not wrapped yet, just return slice
+      return Object.freeze(this.events.slice(0, this.count));
+    }
+
+    // Wrapped around - need to reorder
+    const result: TelemetryEvent[] = new Array(this.count);
+    for (let i = 0; i < this.count; i++) {
+      result[i] = this.events[(this.head + i) % this.MAX_EVENTS];
+    }
+    return Object.freeze(result);
   }
 
   /**
-   * Clear all events
+   * Clear all events - O(1)
    */
   clear(): void {
-    this.events.length = 0;
-    this.nextIndex = 0;
-    this.isCircular = false;
+    this.head = 0;
+    this.count = 0;
   }
 
   /**
@@ -91,10 +93,10 @@ class Telemetry {
   }
 
   /**
-   * Get event count (lightweight check)
+   * Get event count - O(1)
    */
   getEventCount(): number {
-    return this.isCircular ? this.MAX_EVENTS : this.events.length;
+    return this.count;
   }
 }
 
@@ -105,16 +107,17 @@ export const telemetry = new Telemetry();
 
 /**
  * Hook to use telemetry in components
- * Optimized with useMemo to prevent unnecessary re-renders
+ * Memoized to prevent unnecessary re-renders
  */
 export function useTelemetry() {
-  const methodsRef = useRef({
-    log: telemetry.log.bind(telemetry),
-    getEvents: telemetry.getEvents.bind(telemetry),
-    clear: telemetry.clear.bind(telemetry),
-    isEnabled: telemetry.isEnabled.bind(telemetry),
-    getEventCount: telemetry.getEventCount.bind(telemetry),
-  });
-
-  return useMemo(() => methodsRef.current, []);
+  return useMemo(
+    () => ({
+      log: telemetry.log.bind(telemetry),
+      getEvents: telemetry.getEvents.bind(telemetry),
+      clear: telemetry.clear.bind(telemetry),
+      isEnabled: telemetry.isEnabled.bind(telemetry),
+      getEventCount: telemetry.getEventCount.bind(telemetry),
+    }),
+    []
+  );
 }

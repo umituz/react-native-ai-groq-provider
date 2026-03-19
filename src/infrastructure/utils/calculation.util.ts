@@ -1,25 +1,23 @@
 /**
  * Calculation Utilities
  * Common calculation and utility functions for numeric operations
+ * Optimized for performance
  */
 
-const MAX_RANDOM_ID_LENGTH = 11; // Max chars from Math.random().toString(36)
+const MAX_RANDOM_ID_LENGTH = 11;
 
 /**
  * Generate a random unique identifier string
- * @param length - Length of the random string (default: 9, max: 11)
- * @returns Random string in base-36
+ * Uses optimized single-pass operations
  */
 export function generateRandomId(length: number = 9): string {
   const safeLength = Math.min(Math.max(1, Math.floor(length)), MAX_RANDOM_ID_LENGTH);
-  const randomStr = Math.random().toString(36).substring(2);
-  return randomStr.substring(0, safeLength);
+  const randomStr = Math.random().toString(36).substring(2, 2 + safeLength);
+  return randomStr;
 }
 
 /**
  * Generate a unique chat session ID
- * @param prefix - Optional prefix for the ID (default: "groq-chat")
- * @returns Unique session identifier
  */
 export function generateSessionId(prefix: string = "groq-chat"): string {
   return `${prefix}-${Date.now()}-${generateRandomId(9)}`;
@@ -27,19 +25,13 @@ export function generateSessionId(prefix: string = "groq-chat"): string {
 
 /**
  * Calculate maximum number of messages based on token limit
- * Uses a heuristic of approximately 100 tokens per message
- * @param maxTokens - Maximum allowed tokens
- * @param tokensPerMessage - Estimated tokens per message (default: 100)
- * @returns Maximum number of messages
  */
 export function calculateMaxMessages(
   maxTokens: number,
   tokensPerMessage: number = 100
 ): number {
-  if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
-    return 0;
-  }
-  if (!Number.isFinite(tokensPerMessage) || tokensPerMessage <= 0) {
+  if (!Number.isFinite(maxTokens) || maxTokens <= 0 ||
+      !Number.isFinite(tokensPerMessage) || tokensPerMessage <= 0) {
     return 0;
   }
   return Math.floor(maxTokens / tokensPerMessage);
@@ -47,12 +39,10 @@ export function calculateMaxMessages(
 
 /**
  * Calculate exponential backoff delay
- * @param baseDelay - Initial delay in milliseconds
- * @param attempt - Current attempt number (0-indexed)
- * @returns Delay in milliseconds
  */
 export function calculateExponentialBackoff(baseDelay: number, attempt: number): number {
-  if (!Number.isFinite(baseDelay) || baseDelay < 0 || !Number.isFinite(attempt) || attempt < 0) {
+  if (!Number.isFinite(baseDelay) || baseDelay < 0 ||
+      !Number.isFinite(attempt) || attempt < 0) {
     return 0;
   }
   return baseDelay * Math.pow(2, attempt);
@@ -60,10 +50,6 @@ export function calculateExponentialBackoff(baseDelay: number, attempt: number):
 
 /**
  * Clamp a value between min and max
- * @param value - Value to clamp
- * @param min - Minimum allowed value
- * @param max - Maximum allowed value
- * @returns Clamped value
  */
 export function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -74,10 +60,7 @@ export function clamp(value: number, min: number, max: number): number {
 
 /**
  * Calculate percentage with optional decimal places
- * @param value - Current value
- * @param total - Total value
- * @param decimals - Number of decimal places (default: 2)
- * @returns Percentage value
+ * Optimized: avoids string conversion
  */
 export function calculatePercentage(
   value: number,
@@ -87,16 +70,12 @@ export function calculatePercentage(
   if (!Number.isFinite(value) || !Number.isFinite(total) || total === 0) {
     return 0;
   }
-  const safeDecimals = Math.max(0, Math.min(20, Math.floor(decimals)));
-  return Number(((value / total) * 100).toFixed(safeDecimals));
+  const multiplier = Math.pow(10, Math.max(0, Math.min(20, Math.floor(decimals))));
+  return Math.round((value / total) * 100 * multiplier) / multiplier;
 }
 
 /**
  * Calculate buffer size limit for streaming
- * Ensures buffer doesn't grow beyond reasonable limits
- * @param currentSize - Current buffer size
- * @param maxSize - Maximum allowed buffer size
- * @returns Safe buffer size
  */
 export function calculateSafeBufferSize(currentSize: number, maxSize: number): number {
   if (!Number.isFinite(currentSize) || !Number.isFinite(maxSize) || maxSize <= 0) {
@@ -110,22 +89,14 @@ export function calculateSafeBufferSize(currentSize: number, maxSize: number): n
 
 /**
  * Calculate token estimate from text
- * Rough approximation: ~4 characters per token
- * @param text - Text to estimate tokens for
- * @returns Estimated token count
  */
 export function estimateTokens(text: string): number {
-  if (!text) {
-    return 0;
-  }
+  if (!text) return 0;
   return Math.ceil(text.length / 4);
 }
 
 /**
  * Calculate if message count is within safe limits
- * @param messageCount - Current message count
- * @param maxMessages - Maximum allowed messages
- * @returns Whether within safe limits
  */
 export function isWithinSafeLimit(messageCount: number, maxMessages: number): boolean {
   return Number.isFinite(messageCount) &&
@@ -136,11 +107,6 @@ export function isWithinSafeLimit(messageCount: number, maxMessages: number): bo
 
 /**
  * Calculate retry delay with jitter
- * Adds random jitter to prevent thundering herd
- * @param baseDelay - Base delay in milliseconds
- * @param attempt - Current attempt number
- * @param jitterFactor - Jitter factor (0-1, default: 0.1)
- * @returns Delay with jitter applied
  */
 export function calculateRetryDelayWithJitter(
   baseDelay: number,
@@ -159,11 +125,6 @@ export function calculateRetryDelayWithJitter(
 
 /**
  * Calculate timeout for network requests
- * Based on exponential backoff with a maximum cap
- * @param attempt - Current attempt number
- * @param baseTimeout - Base timeout in milliseconds (default: 5000)
- * @param maxTimeout - Maximum timeout in milliseconds (default: 30000)
- * @returns Timeout in milliseconds
  */
 export function calculateRequestTimeout(
   attempt: number,
@@ -181,33 +142,36 @@ export function calculateRequestTimeout(
 
 /**
  * Calculate data transfer rate
- * @param bytes - Number of bytes transferred
- * @param milliseconds - Time taken in milliseconds
- * @returns Transfer rate in KB/s
  */
 export function calculateTransferRate(bytes: number, milliseconds: number): number {
   if (!Number.isFinite(bytes) || bytes < 0 ||
       !Number.isFinite(milliseconds) || milliseconds <= 0) {
     return 0;
   }
-  const seconds = milliseconds / 1000;
-  const kilobytes = bytes / 1024;
-  return Number((kilobytes / seconds).toFixed(2));
+  const kilobytesPerSecond = (bytes / 1024) * (1000 / milliseconds);
+  return Math.round(kilobytesPerSecond * 100) / 100;
 }
 
 /**
  * Calculate average from array of numbers
- * @param values - Array of numbers
- * @returns Average value or 0 if array is empty
+ * Optimized: Single pass with inline validation
  */
 export function calculateAverage(values: number[]): number {
   if (!Array.isArray(values) || values.length === 0) {
     return 0;
   }
-  const validValues = values.filter(v => Number.isFinite(v));
-  if (validValues.length === 0) {
-    return 0;
+
+  let sum = 0;
+  let count = 0;
+
+  // Single pass: validate and sum
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (Number.isFinite(v)) {
+      sum += v;
+      count++;
+    }
   }
-  const sum = validValues.reduce((acc, val) => acc + val, 0);
-  return sum / validValues.length;
+
+  return count === 0 ? 0 : sum / count;
 }

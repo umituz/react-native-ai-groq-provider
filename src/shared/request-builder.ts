@@ -29,7 +29,7 @@ export class RequestBuilder {
       defaultMaxTokens = 1024,
     } = options;
 
-    return {
+    const request: GroqChatRequest = {
       model,
       messages,
       temperature: generationConfig.temperature !== undefined
@@ -38,12 +38,27 @@ export class RequestBuilder {
       max_tokens: generationConfig.maxTokens !== undefined
         ? generationConfig.maxTokens
         : defaultMaxTokens,
-      top_p: generationConfig.topP,
-      n: generationConfig.n,
-      stop: generationConfig.stop,
-      frequency_penalty: generationConfig.frequencyPenalty,
-      presence_penalty: generationConfig.presencePenalty,
     };
+
+    // Only include defined optional properties
+    // Map camelCase to snake_case for API
+    if (generationConfig.topP !== undefined) {
+      request.top_p = generationConfig.topP;
+    }
+    if (generationConfig.n !== undefined) {
+      request.n = generationConfig.n;
+    }
+    if (generationConfig.stop !== undefined) {
+      request.stop = generationConfig.stop;
+    }
+    if (generationConfig.frequencyPenalty !== undefined) {
+      request.frequency_penalty = generationConfig.frequencyPenalty;
+    }
+    if (generationConfig.presencePenalty !== undefined) {
+      request.presence_penalty = generationConfig.presencePenalty;
+    }
+
+    return request;
   }
 
   static buildPromptRequest(

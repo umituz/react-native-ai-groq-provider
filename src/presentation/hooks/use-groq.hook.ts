@@ -3,7 +3,7 @@
  * Main React hook for Groq text generation
  */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
 import { generateText } from "../../application/use-cases/text-generation.usecase";
 import { generateStructured } from "../../application/use-cases/structured-generation.usecase";
@@ -41,14 +41,30 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  // Memoize options with proper deep equality check
-  const stableOptions = useMemo(() => options, [
-    options.model,
-    JSON.stringify(options.generationConfig),
-    options.onStart,
-    options.onSuccess,
-    options.onError,
-  ]);
+  // Use refs to avoid unnecessary re-creates and JSON.stringify
+  const optionsRef = useRef(options);
+  const callbacksRef = useRef({
+    onStart: options.onStart,
+    onSuccess: options.onSuccess,
+    onError: options.onError,
+  });
+
+  // Update refs when options change
+  if (options.model !== optionsRef.current.model) {
+    optionsRef.current.model = options.model;
+  }
+  if (options.generationConfig !== optionsRef.current.generationConfig) {
+    optionsRef.current.generationConfig = options.generationConfig;
+  }
+  if (options.onStart !== callbacksRef.current.onStart) {
+    callbacksRef.current.onStart = options.onStart;
+  }
+  if (options.onSuccess !== callbacksRef.current.onSuccess) {
+    callbacksRef.current.onSuccess = options.onSuccess;
+  }
+  if (options.onError !== callbacksRef.current.onError) {
+    callbacksRef.current.onError = options.onError;
+  }
 
   const generate = useCallback(
     async (prompt: string, config?: GroqGenerationConfig): Promise<string> => {
@@ -56,27 +72,30 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      stableOptions.onStart?.();
+      callbacksRef.current.onStart?.();
 
       try {
         const response = await generateText(prompt, {
-          model: stableOptions.model,
-          generationConfig: { ...stableOptions.generationConfig, ...config },
+          model: optionsRef.current.model,
+          generationConfig: {
+            ...optionsRef.current.generationConfig,
+            ...config,
+          },
         });
 
         setResult(response);
-        stableOptions.onSuccess?.(response);
+        callbacksRef.current.onSuccess?.(response);
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        callbacksRef.current.onError?.(errorMessage);
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [] // No deps - uses refs
   );
 
   const generateJSON = useCallback(
@@ -88,29 +107,32 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
       setError(null);
       setResult(null);
 
-      stableOptions.onStart?.();
+      callbacksRef.current.onStart?.();
 
       try {
         const response = await generateStructured<T>(prompt, {
-          model: stableOptions.model,
-          generationConfig: { ...stableOptions.generationConfig, ...config },
+          model: optionsRef.current.model,
+          generationConfig: {
+            ...optionsRef.current.generationConfig,
+            ...config,
+          },
           schema: config?.schema,
         });
 
         const jsonStr = JSON.stringify(response, null, 2);
         setResult(jsonStr);
-        stableOptions.onSuccess?.(jsonStr);
+        callbacksRef.current.onSuccess?.(jsonStr);
         return response;
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        callbacksRef.current.onError?.(errorMessage);
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [] // No deps - uses refs
   );
 
   const stream = useCallback(
@@ -125,32 +147,35 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
 
       let fullContent = "";
 
-      stableOptions.onStart?.();
+      callbacksRef.current.onStart?.();
 
       try {
         for await (const chunk of streamText(prompt, {
-          model: stableOptions.model,
-          generationConfig: { ...stableOptions.generationConfig, ...config },
+          model: optionsRef.current.model,
+          generationConfig: {
+            ...optionsRef.current.generationConfig,
+            ...config,
+          },
           callbacks: { onChunk: (c) => {
             fullContent += c;
             onChunk(c);
           }},
         })) {
-          fullContent += chunk; // Accumulate all chunks
+          fullContent += chunk;
         }
 
         setResult(fullContent);
-        stableOptions.onSuccess?.(fullContent);
+        callbacksRef.current.onSuccess?.(fullContent);
       } catch (err) {
         const errorMessage = getUserFriendlyError(err);
         setError(errorMessage);
-        stableOptions.onError?.(errorMessage);
+        callbacksRef.current.onError?.(errorMessage);
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [stableOptions]
+    [] // No deps - uses refs
   );
 
   const reset = useCallback(() => {

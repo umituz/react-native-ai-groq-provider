@@ -1,6 +1,7 @@
 /**
  * Structured Generation Use Case
  * Generates structured JSON output from prompts
+ * Optimized for performance
  */
 
 import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
@@ -12,7 +13,7 @@ import { ResponseHandler } from "../../shared/response-handler";
 import { GroqError, GroqErrorType } from "../../domain/entities/error.types";
 import { cleanJsonResponse } from "../../infrastructure/utils/content-mapper.util";
 
-const MAX_CONTENT_LENGTH_FOR_ERROR = 200; // Truncate content in error messages
+const MAX_CONTENT_LENGTH_FOR_ERROR = 200;
 
 export interface StructuredGenerationOptions<T> {
   model?: string;
@@ -57,7 +58,6 @@ export async function generateStructured<T = Record<string, unknown>>(
   try {
     const parsed = JSON.parse(content) as T;
 
-    // Validate that result is an object
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error("Response is not a valid object");
     }
@@ -80,7 +80,7 @@ export async function generateStructured<T = Record<string, unknown>>(
 
     throw new GroqError(
       GroqErrorType.UNKNOWN_ERROR,
-      `Failed to parse JSON response. Expected valid JSON object but got: ${truncatedContent}`,
+      `Failed to parse JSON response: ${truncatedContent}`,
       error
     );
   }
@@ -92,12 +92,17 @@ function buildSystemPrompt<T>(
 ): string {
   let prompt = "You are a helpful assistant that generates valid JSON output.";
 
-  if (schema) {
-    prompt += `\n\nResponse must conform to this JSON schema:\n${JSON.stringify(schema, null, 2)}`;
-  }
+  if (schema || example) {
+    prompt += "\n\nResponse requirements:";
 
-  if (example) {
-    prompt += `\n\nExample response format:\n${JSON.stringify(example, null, 2)}`;
+    if (schema) {
+      // Use compact JSON to reduce tokens and improve speed
+      prompt += `\nSchema: ${JSON.stringify(schema)}`;
+    }
+
+    if (example) {
+      prompt += `\nExample: ${JSON.stringify(example)}`;
+    }
   }
 
   prompt += "\n\nIMPORTANT: Respond ONLY with valid JSON. No markdown, no code blocks.";

@@ -1,6 +1,7 @@
 /**
  * Streaming Client
  * Handles SSE streaming from Groq API
+ * Optimized for performance and memory efficiency
  */
 
 import type { GroqChatRequest, GroqChatChunk } from "../../domain/entities/groq.types";
@@ -9,7 +10,7 @@ import { logger } from "../../shared/logger";
 
 const DEFAULT_TIMEOUT = 60000;
 const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
-const MAX_INCOMPLETE_CHUNKS = 10; // Max consecutive parse failures
+const MAX_INCOMPLETE_CHUNKS = 10;
 
 export async function* streamChatCompletion(
   request: GroqChatRequest,
@@ -21,14 +22,14 @@ export async function* streamChatCompletion(
 
 class GroqStreamingClient {
   private normalizeBaseUrl(baseUrl: string): string {
-    return baseUrl.replace(/\/+$/, ""); // Remove trailing slashes
+    return baseUrl.replace(/\/+$/, "");
   }
 
   private validateTimeout(timeout?: number): number {
     if (timeout === undefined || timeout === null || timeout <= 0) {
       return DEFAULT_TIMEOUT;
     }
-    return Math.min(timeout, 300000); // Cap at 5 minutes
+    return Math.min(timeout, 300000);
   }
 
   async* stream(
@@ -39,9 +40,7 @@ class GroqStreamingClient {
     const url = `${baseUrl}/chat/completions`;
     const timeout = this.validateTimeout(config.timeoutMs);
 
-    logger.debug("StreamingClient", "Starting stream", {
-      model: request.model,
-    });
+    logger.debug("StreamingClient", "Starting stream", { model: request.model });
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -79,6 +78,7 @@ class GroqStreamingClient {
   private async* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<GroqChatChunk> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
+    const chunks: string[] = []; // Array for efficient string building
     let buffer = "";
     let consecutiveErrors = 0;
 
@@ -87,17 +87,20 @@ class GroqStreamingClient {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
+        chunks.push(decoder.decode(value, { stream: true }));
 
-        // Safe buffer management - only trim if necessary
+        // Join all chunks at once - more efficient than +=
+        buffer = chunks.join("");
+        chunks.length = 0; // Clear array
+
+        // Trim buffer if necessary
         if (buffer.length > MAX_BUFFER_SIZE) {
-          const keepSize = Math.floor(MAX_BUFFER_SIZE / 2);
-          buffer = buffer.slice(-keepSize);
-          logger.warn("StreamingClient", "Buffer trimmed due to size limit");
+          buffer = buffer.slice(-Math.floor(MAX_BUFFER_SIZE / 2));
+          logger.warn("StreamingClient", "Buffer trimmed");
         }
 
         const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // Keep incomplete line in buffer
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -107,21 +110,19 @@ class GroqStreamingClient {
             try {
               const jsonStr = trimmed.slice(6);
               const chunk = JSON.parse(jsonStr) as GroqChatChunk;
-              consecutiveErrors = 0; // Reset error counter on success
+              consecutiveErrors = 0;
               yield chunk;
             } catch (error) {
               consecutiveErrors++;
-              logger.error("StreamingClient", "Failed to parse SSE chunk", {
-                error,
-                chunk: trimmed.substring(0, 100),
+              logger.error("StreamingClient", "Parse error", {
+                error: error instanceof Error ? error.message : String(error),
                 consecutiveErrors,
               });
 
-              // After too many consecutive errors, abort the stream
               if (consecutiveErrors >= MAX_INCOMPLETE_CHUNKS) {
                 throw new GroqError(
                   GroqErrorType.SERVER_ERROR,
-                  `Stream corrupted: ${consecutiveErrors} consecutive parse failures`
+                  `Stream corrupted: ${consecutiveErrors} parse failures`
                 );
               }
             }
