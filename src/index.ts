@@ -2,18 +2,11 @@
  * @umituz/react-native-ai-groq-provider
  * Groq text generation provider for React Native applications
  *
- * DDD Architecture:
- * - Domain: Core entities and types
- * - Application: Use cases and business logic
- * - Infrastructure: External services and HTTP clients
- * - Presentation: React hooks and UI utilities
- * - Shared: Common utilities
- *
  * @author umituz
  * @license MIT
  */
 
-// Domain Layer
+// Domain Layer - Direct exports, no barrel re-exports
 export type {
   GroqConfig,
   GroqGenerationConfig,
@@ -28,12 +21,9 @@ export type {
   GroqChunkChoice,
   GroqErrorResponse,
   GroqChatConfig,
-} from "./domain/entities";
+} from "./domain/entities/groq.types";
 
-export {
-  GROQ_MODELS,
-  DEFAULT_MODELS,
-} from "./domain/entities";
+export { GROQ_MODELS, DEFAULT_MODELS } from "./domain/entities/groq.types";
 
 export {
   GroqError,
@@ -49,59 +39,30 @@ export {
   type ModelInfo,
 } from "./domain/entities/models";
 
-// Application Layer (Use Cases)
-export {
-  generateText,
-  generateStructured,
-  streamText,
-  chatSessionManager,
-  type TextGenerationOptions,
-  type StructuredGenerationOptions,
-  type StreamingCallbacks,
-  type StreamingOptions,
-  type ChatSession,
-  type ChatSendResult,
-} from "./application/use-cases";
+// Application Layer - Direct exports
+export { generateText, type TextGenerationOptions } from "./application/use-cases/text-generation.usecase";
+export { generateStructured, type StructuredGenerationOptions } from "./application/use-cases/structured-generation.usecase";
+export { streamText, type StreamingCallbacks, type StreamingOptions } from "./application/use-cases/streaming.usecase";
+export { chatSessionManager, type ChatSession, type ChatSendResult } from "./application/use-cases/chat-session.usecase";
 
-// Infrastructure Layer
-export {
-  groqHttpClient,
-  streamChatCompletion,
-} from "./infrastructure/http";
+// Infrastructure Layer - Direct exports
+export { groqHttpClient } from "./infrastructure/http/groq-http-client";
+export { streamChatCompletion } from "./infrastructure/http/streaming-client";
 
-// Presentation Layer
-export {
-  useGroq,
-  type UseGroqOptions,
-  type UseGroqReturn,
-} from "./presentation";
+// Presentation Layer - Direct exports
+export { useGroq, type UseGroqOptions, type UseGroqReturn } from "./presentation/hooks/use-groq.hook";
 
-// Shared Layer
-export {
-  logger,
-  LogLevel,
-  Timer,
-  RequestBuilder,
-  ResponseHandler,
-  type LogContext,
-  type TimerResult,
-  type RequestBuilderOptions,
-  type ResponseHandlerResult,
-} from "./shared";
+// Shared Layer - Direct exports
+export { logger, LogLevel, type LogContext } from "./shared/logger";
+export { Timer, type TimerResult } from "./shared/timer";
+export { RequestBuilder, type RequestBuilderOptions } from "./shared/request-builder";
+export { ResponseHandler, type ResponseHandlerResult } from "./shared/response-handler";
 
-// Provider Factory
-export {
-  ConfigBuilder,
-  GenerationConfigBuilder,
-  providerFactory,
-  initializeProvider,
-  configureProvider,
-  resetProvider,
-  type ProviderConfig,
-  type ProviderFactoryOptions,
-} from "./providers/ProviderFactory";
+// Provider Factory - Direct exports, no wrappers
+export { ConfigBuilder, GenerationConfigBuilder } from "./providers/ConfigBuilder";
+export { initializeProvider, resetProvider, isProviderInitialized, type ProviderConfig } from "./providers/ProviderFactory";
 
-// Utilities
+// Utilities - Direct exports, no barrel re-exports
 export {
   createUserMessage,
   createAssistantMessage,
@@ -125,7 +86,7 @@ export {
   executeWithRetry,
   type AsyncStateSetters,
   type AsyncCallbacks,
-} from "./infrastructure/utils/async";
+} from "./infrastructure/utils/async/execute-state.util";
 
 export {
   generateRandomId,
@@ -143,7 +104,4 @@ export {
   calculateAverage,
 } from "./infrastructure/utils/calculation.util";
 
-export {
-  telemetry,
-  useTelemetry,
-} from "./infrastructure/telemetry";
+export { telemetry, useTelemetry } from "./infrastructure/telemetry/TelemetryHooks";

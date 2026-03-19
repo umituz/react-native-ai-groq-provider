@@ -3,13 +3,14 @@
  * Manages multi-turn chat conversations
  */
 
-import type { GroqMessage, GroqChatConfig } from "../../domain/entities";
-import { groqHttpClient } from "../../infrastructure/http";
+import type { GroqMessage, GroqChatConfig } from "../../domain/entities/groq.types";
+import { DEFAULT_MODELS } from "../../domain/entities/groq.types";
+import { groqHttpClient } from "../../infrastructure/http/groq-http-client";
 import { RequestBuilder } from "../../shared/request-builder";
 import { ResponseHandler } from "../../shared/response-handler";
 import { logger } from "../../shared/logger";
 import { GroqError, GroqErrorType } from "../../domain/entities/error.types";
-import { generateSessionId } from "../../utils/calculation.util";
+import { generateSessionId } from "../../infrastructure/utils/calculation.util";
 
 export interface ChatSession {
   id: string;
@@ -40,7 +41,7 @@ class ChatSessionManager {
 
     const session: ChatSession = {
       id: generateSessionId("groq-chat"),
-      model: config.model || "llama-3.3-70b-versatile",
+      model: config.model || DEFAULT_MODELS.TEXT,
       systemInstruction: config.systemInstruction,
       messages: config.history ? [...config.history] : [],
       createdAt: new Date(),
@@ -50,11 +51,7 @@ class ChatSessionManager {
     this.sessions.set(session.id, session);
 
     if (this.sessions.size > this.MAX_SESSIONS) {
-      const sorted = Array.from(this.sessions.entries())
-        .sort(([, a], [, b]) => a.createdAt.getTime() - b.createdAt.getTime());
-
-      const toRemove = sorted.slice(0, this.sessions.size - this.MAX_SESSIONS);
-      toRemove.forEach(([id]) => this.sessions.delete(id));
+      this.removeOldestSessions();
     }
 
     return session;
@@ -80,6 +77,19 @@ class ChatSessionManager {
     }
 
     expiredIds.forEach((id) => this.sessions.delete(id));
+  }
+
+  private removeOldestSessions(): void {
+    const excessCount = this.sessions.size - this.MAX_SESSIONS;
+    if (excessCount <= 0) return;
+
+    // Sort by creation date and remove oldest
+    const sorted = Array.from(this.sessions.entries())
+      .sort(([, a], [, b]) => a.createdAt.getTime() - b.createdAt.getTime());
+
+    for (let i = 0; i < excessCount; i++) {
+      this.sessions.delete(sorted[i][0]);
+    }
   }
 
   async send(sessionId: string, content: string): Promise<ChatSendResult> {

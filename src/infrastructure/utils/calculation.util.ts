@@ -3,13 +3,17 @@
  * Common calculation and utility functions for numeric operations
  */
 
+const MAX_RANDOM_ID_LENGTH = 11; // Max chars from Math.random().toString(36)
+
 /**
  * Generate a random unique identifier string
- * @param length - Length of the random string (default: 9)
+ * @param length - Length of the random string (default: 9, max: 11)
  * @returns Random string in base-36
  */
 export function generateRandomId(length: number = 9): string {
-  return Math.random().toString(36).substring(2, 2 + length);
+  const safeLength = Math.min(Math.max(1, Math.floor(length)), MAX_RANDOM_ID_LENGTH);
+  const randomStr = Math.random().toString(36).substring(2);
+  return randomStr.substring(0, safeLength);
 }
 
 /**
@@ -32,7 +36,10 @@ export function calculateMaxMessages(
   maxTokens: number,
   tokensPerMessage: number = 100
 ): number {
-  if (maxTokens <= 0) {
+  if (!Number.isFinite(maxTokens) || maxTokens <= 0) {
+    return 0;
+  }
+  if (!Number.isFinite(tokensPerMessage) || tokensPerMessage <= 0) {
     return 0;
   }
   return Math.floor(maxTokens / tokensPerMessage);
@@ -45,7 +52,7 @@ export function calculateMaxMessages(
  * @returns Delay in milliseconds
  */
 export function calculateExponentialBackoff(baseDelay: number, attempt: number): number {
-  if (baseDelay < 0 || attempt < 0) {
+  if (!Number.isFinite(baseDelay) || baseDelay < 0 || !Number.isFinite(attempt) || attempt < 0) {
     return 0;
   }
   return baseDelay * Math.pow(2, attempt);
@@ -59,6 +66,9 @@ export function calculateExponentialBackoff(baseDelay: number, attempt: number):
  * @returns Clamped value
  */
 export function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  if (!Number.isFinite(min)) return max;
+  if (!Number.isFinite(max)) return value;
   return Math.min(Math.max(value, min), max);
 }
 
@@ -74,10 +84,11 @@ export function calculatePercentage(
   total: number,
   decimals: number = 2
 ): number {
-  if (total === 0) {
+  if (!Number.isFinite(value) || !Number.isFinite(total) || total === 0) {
     return 0;
   }
-  return Number(((value / total) * 100).toFixed(decimals));
+  const safeDecimals = Math.max(0, Math.min(20, Math.floor(decimals)));
+  return Number(((value / total) * 100).toFixed(safeDecimals));
 }
 
 /**
@@ -88,6 +99,9 @@ export function calculatePercentage(
  * @returns Safe buffer size
  */
 export function calculateSafeBufferSize(currentSize: number, maxSize: number): number {
+  if (!Number.isFinite(currentSize) || !Number.isFinite(maxSize) || maxSize <= 0) {
+    return 0;
+  }
   if (currentSize > maxSize) {
     return Math.floor(maxSize / 2);
   }
@@ -114,7 +128,10 @@ export function estimateTokens(text: string): number {
  * @returns Whether within safe limits
  */
 export function isWithinSafeLimit(messageCount: number, maxMessages: number): boolean {
-  return messageCount >= 0 && messageCount <= maxMessages;
+  return Number.isFinite(messageCount) &&
+         Number.isFinite(maxMessages) &&
+         messageCount >= 0 &&
+         messageCount <= maxMessages;
 }
 
 /**
@@ -130,8 +147,13 @@ export function calculateRetryDelayWithJitter(
   attempt: number,
   jitterFactor: number = 0.1
 ): number {
+  if (!Number.isFinite(baseDelay) || baseDelay < 0 ||
+      !Number.isFinite(attempt) || attempt < 0) {
+    return 0;
+  }
+  const safeJitterFactor = clamp(jitterFactor, 0, 1);
   const exponentialDelay = calculateExponentialBackoff(baseDelay, attempt);
-  const jitter = exponentialDelay * jitterFactor * (Math.random() * 2 - 1);
+  const jitter = exponentialDelay * safeJitterFactor * (Math.random() * 2 - 1);
   return Math.max(0, exponentialDelay + jitter);
 }
 
@@ -148,8 +170,13 @@ export function calculateRequestTimeout(
   baseTimeout: number = 5000,
   maxTimeout: number = 30000
 ): number {
-  const timeout = calculateExponentialBackoff(baseTimeout, attempt);
-  return Math.min(timeout, maxTimeout);
+  if (!Number.isFinite(attempt) || attempt < 0) {
+    return baseTimeout;
+  }
+  const safeBaseTimeout = Math.max(0, baseTimeout);
+  const safeMaxTimeout = Math.max(safeBaseTimeout, maxTimeout);
+  const timeout = calculateExponentialBackoff(safeBaseTimeout, attempt);
+  return Math.min(timeout, safeMaxTimeout);
 }
 
 /**
@@ -159,7 +186,8 @@ export function calculateRequestTimeout(
  * @returns Transfer rate in KB/s
  */
 export function calculateTransferRate(bytes: number, milliseconds: number): number {
-  if (milliseconds === 0) {
+  if (!Number.isFinite(bytes) || bytes < 0 ||
+      !Number.isFinite(milliseconds) || milliseconds <= 0) {
     return 0;
   }
   const seconds = milliseconds / 1000;
@@ -173,9 +201,13 @@ export function calculateTransferRate(bytes: number, milliseconds: number): numb
  * @returns Average value or 0 if array is empty
  */
 export function calculateAverage(values: number[]): number {
-  if (values.length === 0) {
+  if (!Array.isArray(values) || values.length === 0) {
     return 0;
   }
-  const sum = values.reduce((acc, val) => acc + val, 0);
-  return sum / values.length;
+  const validValues = values.filter(v => Number.isFinite(v));
+  if (validValues.length === 0) {
+    return 0;
+  }
+  const sum = validValues.reduce((acc, val) => acc + val, 0);
+  return sum / validValues.length;
 }

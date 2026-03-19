@@ -3,13 +3,16 @@
  * Generates structured JSON output from prompts
  */
 
-import type { GroqGenerationConfig, GroqMessage } from "../../domain/entities";
-import { groqHttpClient } from "../../infrastructure/http";
+import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
+import { groqHttpClient } from "../../infrastructure/http/groq-http-client";
 import { RequestBuilder } from "../../shared/request-builder";
+import { Timer } from "../../shared/timer";
+import { logger } from "../../shared/logger";
 import { ResponseHandler } from "../../shared/response-handler";
-import { Timer, logger } from "../../shared/logger";
 import { GroqError, GroqErrorType } from "../../domain/entities/error.types";
-import { cleanJsonResponse } from "../../utils/content-mapper.util";
+import { cleanJsonResponse } from "../../infrastructure/utils/content-mapper.util";
+
+const MAX_CONTENT_LENGTH_FOR_ERROR = 200; // Truncate content in error messages
 
 export interface StructuredGenerationOptions<T> {
   model?: string;
@@ -54,6 +57,11 @@ export async function generateStructured<T = Record<string, unknown>>(
   try {
     const parsed = JSON.parse(content) as T;
 
+    // Validate that result is an object
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error("Response is not a valid object");
+    }
+
     logger.debug("StructuredGeneration", "Complete", {
       totalDuration: Timer.format(result.totalMs),
       parsedKeys: Object.keys(parsed),
@@ -66,9 +74,13 @@ export async function generateStructured<T = Record<string, unknown>>(
       contentLength: content.length,
     });
 
+    const truncatedContent = content.length > MAX_CONTENT_LENGTH_FOR_ERROR
+      ? content.substring(0, MAX_CONTENT_LENGTH_FOR_ERROR) + "..."
+      : content;
+
     throw new GroqError(
       GroqErrorType.UNKNOWN_ERROR,
-      `Failed to parse JSON: ${content}`,
+      `Failed to parse JSON response. Expected valid JSON object but got: ${truncatedContent}`,
       error
     );
   }

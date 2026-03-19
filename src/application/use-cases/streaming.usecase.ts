@@ -3,10 +3,11 @@
  * Handles streaming text generation
  */
 
-import type { GroqGenerationConfig } from "../../domain/entities";
-import { streamChatCompletion } from "../../infrastructure/http";
+import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
+import { streamChatCompletion } from "../../infrastructure/http/streaming-client";
 import { RequestBuilder } from "../../shared/request-builder";
 import { logger } from "../../shared/logger";
+import { groqHttpClient } from "../../infrastructure/http/groq-http-client";
 
 export interface StreamingCallbacks {
   onChunk?: (chunk: string) => void;
@@ -29,16 +30,21 @@ export async function* streamText(
     promptLength: prompt.length,
   });
 
+  if (!groqHttpClient.isInitialized()) {
+    throw new Error("Groq client not initialized. Call initializeProvider() first.");
+  }
+
+  const config = groqHttpClient.getConfig();
   const request = RequestBuilder.buildPromptRequest(prompt, options);
-  const config = {
-    apiKey: "", // Will be set by factory
-    baseUrl: "", // Will be set by factory
-  };
 
   let fullContent = "";
 
   try {
-    for await (const chunk of streamChatCompletion(request, config)) {
+    for await (const chunk of streamChatCompletion(request, {
+      apiKey: config.apiKey,
+      baseUrl: config.baseUrl,
+      timeoutMs: config.timeoutMs,
+    })) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
         fullContent += content;

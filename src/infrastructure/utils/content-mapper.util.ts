@@ -3,7 +3,7 @@
  * Utilities for working with message content
  */
 
-import type { GroqMessage } from "../../domain/entities";
+import type { GroqMessage } from "../../domain/entities/groq.types";
 
 /**
  * Create a user message

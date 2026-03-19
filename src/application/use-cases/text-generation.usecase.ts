@@ -3,11 +3,12 @@
  * Handles simple text generation from prompts
  */
 
-import type { GroqGenerationConfig } from "../../domain/entities";
-import { groqHttpClient } from "../../infrastructure/http";
+import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
+import { groqHttpClient } from "../../infrastructure/http/groq-http-client";
 import { RequestBuilder } from "../../shared/request-builder";
 import { ResponseHandler } from "../../shared/response-handler";
-import { Timer, logger } from "../../shared";
+import { Timer } from "../../shared/timer";
+import { logger } from "../../shared/logger";
 
 export interface TextGenerationOptions {
   model?: string;

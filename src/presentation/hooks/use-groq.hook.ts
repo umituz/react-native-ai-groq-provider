@@ -4,9 +4,11 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-import type { GroqGenerationConfig } from "../../domain/entities";
-import { generateText, generateStructured, streamText } from "../../application/use-cases";
-import { getUserFriendlyError } from "../../utils/error-mapper.util";
+import type { GroqGenerationConfig } from "../../domain/entities/groq.types";
+import { generateText } from "../../application/use-cases/text-generation.usecase";
+import { generateStructured } from "../../application/use-cases/structured-generation.usecase";
+import { streamText } from "../../application/use-cases/streaming.usecase";
+import { getUserFriendlyError } from "../../infrastructure/utils/error-mapper.util";
 
 export interface UseGroqOptions {
   model?: string;
@@ -39,24 +41,14 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
 
-  const stableOptions = useMemo(
-    () => ({
-      model: options.model,
-      generationConfig: options.generationConfig,
-      onStart: options.onStart,
-      onSuccess: options.onSuccess,
-      onError: options.onError,
-    }),
-    [
-      options.model,
-      options.generationConfig?.temperature,
-      options.generationConfig?.maxTokens,
-      options.generationConfig?.topP,
-      options.onStart,
-      options.onSuccess,
-      options.onError,
-    ]
-  );
+  // Memoize options with proper deep equality check
+  const stableOptions = useMemo(() => options, [
+    options.model,
+    JSON.stringify(options.generationConfig),
+    options.onStart,
+    options.onSuccess,
+    options.onError,
+  ]);
 
   const generate = useCallback(
     async (prompt: string, config?: GroqGenerationConfig): Promise<string> => {
@@ -144,7 +136,7 @@ export function useGroq(options: UseGroqOptions = {}): UseGroqReturn {
             onChunk(c);
           }},
         })) {
-          // Consume iterator
+          fullContent += chunk; // Accumulate all chunks
         }
 
         setResult(fullContent);

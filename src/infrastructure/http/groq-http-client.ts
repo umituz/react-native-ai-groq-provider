@@ -7,13 +7,14 @@ import type {
   GroqConfig,
   GroqChatRequest,
   GroqChatResponse,
-  GroqChatChunk,
-} from "../../domain/entities";
+} from "../../domain/entities/groq.types";
 import { GroqError, GroqErrorType, mapHttpStatusToErrorType } from "../../domain/entities/error.types";
 import { logger } from "../../shared/logger";
 
 const DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
 const DEFAULT_TIMEOUT = 60000;
+const MIN_API_KEY_LENGTH = 10;
+const GROQ_KEY_PREFIX = "gsk_";
 
 class GroqHttpClient {
   private config: GroqConfig | null = null;
@@ -28,17 +29,30 @@ class GroqHttpClient {
       baseUrl: config.baseUrl || DEFAULT_BASE_URL,
     });
 
-    if (!apiKey || apiKey.length < 10) {
+    if (!apiKey) {
       throw new GroqError(
         GroqErrorType.INVALID_API_KEY,
-        "API key is required and must be at least 10 characters"
+        "API key is required"
       );
+    }
+
+    if (apiKey.length < MIN_API_KEY_LENGTH) {
+      throw new GroqError(
+        GroqErrorType.INVALID_API_KEY,
+        `API key must be at least ${MIN_API_KEY_LENGTH} characters`
+      );
+    }
+
+    if (!apiKey.startsWith(GROQ_KEY_PREFIX)) {
+      logger.warn("GroqClient", "API key does not start with expected prefix", {
+        prefix: GROQ_KEY_PREFIX,
+      });
     }
 
     this.config = {
       apiKey,
-      baseUrl: config.baseUrl || DEFAULT_BASE_URL,
-      timeoutMs: config.timeoutMs || DEFAULT_TIMEOUT,
+      baseUrl: this.normalizeBaseUrl(config.baseUrl),
+      timeoutMs: this.validateTimeout(config.timeoutMs),
       textModel: config.textModel,
     };
     this.initialized = true;
@@ -46,6 +60,28 @@ class GroqHttpClient {
     logger.debug("GroqClient", "Initialization complete", {
       initialized: this.initialized,
     });
+  }
+
+  private normalizeBaseUrl(baseUrl?: string): string {
+    if (!baseUrl) {
+      return DEFAULT_BASE_URL;
+    }
+    return baseUrl.replace(/\/+$/, ""); // Remove trailing slashes
+  }
+
+  private validateTimeout(timeout?: number): number {
+    const DEFAULT = DEFAULT_TIMEOUT;
+    if (timeout === undefined || timeout === null) {
+      return DEFAULT;
+    }
+    if (!Number.isFinite(timeout) || timeout <= 0) {
+      logger.warn("GroqClient", "Invalid timeout, using default", {
+        provided: timeout,
+        default: DEFAULT,
+      });
+      return DEFAULT;
+    }
+    return Math.min(timeout, 300000); // Cap at 5 minutes
   }
 
   isInitialized(): boolean {
@@ -95,7 +131,19 @@ class GroqHttpClient {
         await this.handleErrorResponse(response);
       }
 
-      return (await response.json()) as T;
+      const text = await response.text();
+      if (!text) {
+        throw new GroqError(GroqErrorType.SERVER_ERROR, "Empty response from server");
+      }
+
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new GroqError(
+          GroqErrorType.SERVER_ERROR,
+          `Invalid JSON response: ${text.substring(0, 200)}`
+        );
+      }
     } catch (error) {
       throw this.handleRequestError(error);
     }
@@ -106,9 +154,17 @@ class GroqHttpClient {
     const errorType = mapHttpStatusToErrorType(response.status);
 
     try {
-      const errorData = (await response.json()) as { error?: { message?: string } };
-      if (errorData.error?.message) {
-        errorMessage = errorData.error.message;
+      const text = await response.text();
+      if (text) {
+        try {
+          const errorData = JSON.parse(text) as { error?: { message?: string } };
+          if (errorData.error?.message) {
+            errorMessage = errorData.error.message;
+          }
+        } catch {
+          // Use text content if JSON parsing fails
+          errorMessage = text.substring(0, 500);
+        }
       }
     } catch {
       // Use default message
@@ -122,9 +178,9 @@ class GroqHttpClient {
 
     if (error instanceof Error) {
       if (error.name === "AbortError") {
-        return new GroqError(GroqErrorType.ABORT_ERROR, "Request aborted", error);
+        return new GroqError(GroqErrorType.ABORT_ERROR, "Request timeout", error);
       }
-      if (error.message.includes("network")) {
+      if (error.name === "TypeError" && error.message.includes("network")) {
         return new GroqError(GroqErrorType.NETWORK_ERROR, "Network error", error);
       }
     }

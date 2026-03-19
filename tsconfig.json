@@ -13,8 +13,7 @@
     "skipLibCheck": true,
     "strict": false,
     "esModuleInterop": true,
-    "skipDefaultLibCheck": true,
-    "types": ["node", "react", "react-native"]
+    "skipDefaultLibCheck": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]

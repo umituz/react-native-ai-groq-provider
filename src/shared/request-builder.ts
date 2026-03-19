@@ -7,8 +7,8 @@ import type {
   GroqChatRequest,
   GroqGenerationConfig,
   GroqMessage,
-} from "../domain/entities";
-import { DEFAULT_MODELS } from "../domain/entities";
+} from "../domain/entities/groq.types";
+import { DEFAULT_MODELS } from "../domain/entities/groq.types";
 
 export interface RequestBuilderOptions {
   model?: string;
@@ -32,8 +32,12 @@ export class RequestBuilder {
     return {
       model,
       messages,
-      temperature: generationConfig.temperature ?? defaultTemperature,
-      max_tokens: generationConfig.maxTokens ?? defaultMaxTokens,
+      temperature: generationConfig.temperature !== undefined
+        ? generationConfig.temperature
+        : defaultTemperature,
+      max_tokens: generationConfig.maxTokens !== undefined
+        ? generationConfig.maxTokens
+        : defaultMaxTokens,
       top_p: generationConfig.topP,
       n: generationConfig.n,
       stop: generationConfig.stop,
