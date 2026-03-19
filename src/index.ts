@@ -141,7 +141,7 @@ export {
   calculateRequestTimeout,
   calculateTransferRate,
   calculateAverage,
-} from "./utils/calculation.util";
+} from "./infrastructure/utils/calculation.util";
 
 export {
   telemetry,
