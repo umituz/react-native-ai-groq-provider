@@ -43,6 +43,7 @@ export {
 export { generateText, type TextGenerationOptions } from "./application/use-cases/text-generation.usecase";
 export { generateStructured, type StructuredGenerationOptions } from "./application/use-cases/structured-generation.usecase";
 export { streamText, type StreamingCallbacks, type StreamingOptions } from "./application/use-cases/streaming.usecase";
+export { chatGeneration, type ChatGenerationOptions } from "./application/use-cases/chat-generation.usecase";
 export { chatSessionManager, type ChatSession, type ChatSendResult } from "./application/use-cases/chat-session.usecase";
 
 // Infrastructure Layer - Direct exports
